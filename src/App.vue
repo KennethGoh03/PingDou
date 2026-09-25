@@ -174,8 +174,12 @@ const presets = [
   { label: '29 × 29', w: 29, h: 29 },
   { label: '32 × 32', w: 32, h: 32 },
   { label: '52 × 36', w: 52, h: 36 },
+  { label: '52 × 52', w: 52, h: 52 },
   { label: '64 × 64', w: 64, h: 64 },
-  { label: '80 × 80', w: 80, h: 80 }
+  { label: '80 × 80', w: 80, h: 80 },
+  { label: '100 × 100', w: 100, h: 100 },
+  { label: '128 × 128', w: 128, h: 128 },
+  { label: '200 × 200', w: 200, h: 200 }
 ]
 const tabs = [
   { id: 'preview', label: '预览图片', icon: '▦' },

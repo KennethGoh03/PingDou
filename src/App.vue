@@ -24,7 +24,7 @@
           <label>拼豆盘宽度</label>
           <div class="number-control">
             <button @click="setCols(cols - 1)">−</button>
-            <input v-model.number="colsInput" type="number" min="8" max="1000" @change="setCols(colsInput)" />
+            <input v-model.number="colsInput" type="number" min="8" max="200" @change="setCols(colsInput)" />
             <button @click="setCols(cols + 1)">＋</button>
           </div>
         </div>
@@ -32,7 +32,7 @@
           <label>拼豆盘高度</label>
           <div class="number-control">
             <button @click="setRows(rows - 1)">−</button>
-            <input v-model.number="rowsInput" type="number" min="8" max="1000" @change="setRows(rowsInput)" />
+            <input v-model.number="rowsInput" type="number" min="8" max="200" @change="setRows(rowsInput)" />
             <button @click="setRows(rows + 1)">＋</button>
           </div>
         </div>
@@ -243,14 +243,14 @@ function createBlankPattern() {
 }
 
 function setCols(value) {
-  const next = Math.max(8, Math.min(1000, Number(value) || 52))
+  const next = Math.max(8, Math.min(200, Number(value) || 52))
   if (next === cols.value) return
   cols.value = next
   colsInput.value = next
   regeneratePattern()
 }
 function setRows(value) {
-  const next = Math.max(8, Math.min(1000, Number(value) || 36))
+  const next = Math.max(8, Math.min(200, Number(value) || 36))
   if (next === rows.value) return
   rows.value = next
   rowsInput.value = next

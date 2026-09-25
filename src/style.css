@@ -767,6 +767,7 @@ input[type="range"] { width: 100%; accent-color: #df714c; }
 .toolbar-divider {
   width: 1px;
   height: 22px;
+  background: #e5dedb;
   margin: 0 2px;
 }
 

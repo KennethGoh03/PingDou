@@ -125,15 +125,13 @@
             <span>{{ activeTab === 'edit' ? '点击格子放置拼豆，右侧可以切换底板颜色或 MARD 调色盘' : activeTab === 'iron' ? '去除格线与色号，只保留颜色区块' : '显示拼豆位置、坐标与 MARD 色号' }}</span>
           </div>
           <div class="zoom-controls">
-            <button class="history-button" :disabled="!canUndo" title="撤销 (Ctrl/Cmd + Z)" @click="undo">↶</button>
-            <button class="history-button" :disabled="!canRedo" title="重做 (Ctrl/Cmd + Shift + Z)" @click="redo">↷</button>
-
-            <span class="toolbar-divider"></span>
-            
             <button @click="zoom = Math.max(50, zoom - 10)">−</button>
             <span>{{ zoom }}%</span>
             <button @click="zoom = Math.min(180, zoom + 10)">＋</button>
-            <button class="fit" @click="zoom = 100">重置画布</button>
+            <button class="fit" @click="zoom = 100">适配画布</button>
+            <span class="toolbar-divider"></span>
+            <button class="history-button" :disabled="!canUndo" title="撤销 (Ctrl/Cmd + Z)" @click="undo">↶</button>
+            <button class="history-button" :disabled="!canRedo" title="重做 (Ctrl/Cmd + Shift + Z)" @click="redo">↷</button>
           </div>
         </div>
 
@@ -720,6 +718,8 @@ function selectBaseColor(colorId) {
 }
 
 function resetPattern() {
+  if (!window.confirm('确定要重置当前图纸吗？当前编辑内容将被清除。')) return
+
   imageElement = null
   sourceImage.value = ''
   if (fileInput.value) fileInput.value.value = ''
@@ -981,6 +981,8 @@ function buildExportCanvas() {
 }
 
 function exportPng() {
+  if (!window.confirm('确定要导出当前图纸为 PNG 吗？')) return
+
   const exportCanvas = buildExportCanvas()
   const link = document.createElement('a')
   link.download = `mard-bead-${cols.value}x${rows.value}-pattern.png`
@@ -1063,6 +1065,8 @@ function buildImagePdf(jpegDataUrl, imageWidth, imageHeight) {
 }
 
 function exportPdf() {
+  if (!window.confirm('确定要导出当前图纸为 PDF 吗？')) return
+
   const exportCanvas = buildExportCanvas()
   const jpeg = exportCanvas.toDataURL('image/jpeg', 0.94)
   const pdfBytes = buildImagePdf(jpeg, exportCanvas.width, exportCanvas.height)

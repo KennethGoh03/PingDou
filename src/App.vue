@@ -269,15 +269,23 @@ function regeneratePattern() {
 function handleFile(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  const url = URL.createObjectURL(file)
-  const img = new Image()
-  img.onload = () => {
-    imageElement = img
-    sourceImage.value = url
-    convertImageToPattern(img)
-    URL.revokeObjectURL(url)
+
+  const reader = new FileReader()
+
+  reader.onload = () => {
+    const dataUrl = reader.result
+    const img = new Image()
+
+    img.onload = () => {
+      imageElement = img
+      sourceImage.value = dataUrl
+      convertImageToPattern(img)
+    }
+
+    img.src = dataUrl
   }
-  img.src = url
+
+  reader.readAsDataURL(file)
 }
 
 function convertImageToPattern(img) {

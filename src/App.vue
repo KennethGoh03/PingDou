@@ -39,12 +39,57 @@
         </div>
         <div class="preset-group">
           <label>快速尺寸</label>
-          <div class="preset-list">
-            <button v-for="preset in presets" :key="preset.label" :class="['preset', { active: cols === preset.w && rows === preset.h }]" @click="applyPreset(preset)">
-              {{ preset.label }}
-            </button>
+          <div class="quick-size-select-wrap">
+            <span class="quick-size-icon">▦</span>
+            <select class="quick-size-select" :value="currentPresetLabel || '__custom__'" @change="handlePresetSelect">
+              <option v-if="!currentPresetLabel" value="__custom__">{{ cols }} × {{ rows }}（自定义）</option>
+              <option v-for="preset in presets" :key="preset.label" :value="preset.label">
+                {{ preset.label }}
+              </option>
+            </select>
+            <span class="quick-size-arrow">⌄</span>
           </div>
         </div>
+
+        <div class="guide-group">
+          <label>辅助线 <span>（每组辅助线格数，不包含最外圈 1 格）</span></label>
+          <div class="guide-controls">
+            <button
+              type="button"
+              class="guide-toggle"
+              :class="{ active: showGuideLines }"
+              :title="showGuideLines ? '关闭辅助线' : '开启辅助线'"
+              @click="toggleGuideLines"
+            >
+              <span class="guide-toggle-dot"></span>
+              {{ showGuideLines ? '已开启' : '关闭' }}
+            </button>
+            <div class="guide-size-input-wrap" :class="{ invalid: guideLineDraftError }">
+              <input
+                v-model.number="guideLineColsDraft"
+                class="guide-size-input"
+                type="number"
+                min="1"
+                max="200"
+                aria-label="辅助线横向格数"
+                @input="guideLineDraftError = ''"
+              />
+              <span class="guide-size-multiply">×</span>
+              <input
+                v-model.number="guideLineRowsDraft"
+                class="guide-size-input"
+                type="number"
+                min="1"
+                max="200"
+                aria-label="辅助线纵向格数"
+                @input="guideLineDraftError = ''"
+              />
+            </div>
+            <button type="button" class="guide-confirm" @click="confirmGuideLineSize">确认</button>
+            <span v-if="guideLineDraftError" class="guide-hint error">{{ guideLineDraftError }}</span>
+          </div>
+        </div>
+
         <div class="stat-block">
           <span>当前尺寸</span>
           <strong>{{ cols }} × {{ rows }}</strong>
@@ -125,13 +170,13 @@
             <span>{{ activeTab === 'edit' ? '点击格子放置拼豆，右侧可以切换底板颜色或 MARD 调色盘' : activeTab === 'iron' ? '去除格线与色号，只保留颜色区块' : '显示拼豆位置、坐标与 MARD 色号' }}</span>
           </div>
           <div class="zoom-controls">
+            <button class="history-button" :disabled="!canUndo" title="撤销 (Ctrl/Cmd + Z)" @click="undo">↶</button>
+            <button class="history-button" :disabled="!canRedo" title="重做 (Ctrl/Cmd + Shift + Z)" @click="redo">↷</button>
+            <span class="toolbar-divider"></span>
             <button @click="zoom = Math.max(50, zoom - 10)">−</button>
             <span>{{ zoom }}%</span>
             <button @click="zoom = Math.min(180, zoom + 10)">＋</button>
-            <button class="fit" @click="zoom = 100">适配画布</button>
-            <span class="toolbar-divider"></span>
-            <button class="history-button" :disabled="!canUndo" title="撤销 (Ctrl/Cmd + Z)" @click="undo">↶</button>
-            <button class="history-button" :disabled="!canRedo" title="重做 (Ctrl/Cmd + Shift + Z)" @click="redo">↷</button>
+            <button class="fit" @click="zoom = 100">重置画布</button>
           </div>
         </div>
 
@@ -270,6 +315,7 @@ const presets = [
   { label: '128 × 128', w: 128, h: 128 },
   { label: '200 × 200', w: 200, h: 200 }
 ]
+
 const tabs = [
   { id: 'preview', label: '预览图片', icon: '▦' },
   { id: 'iron', label: '熨烫效果', icon: '◉' },
@@ -291,6 +337,12 @@ const paletteQuery = ref('')
 const boardColorQuery = ref('')
 const selectedColor = ref(palette[0])
 const cells = ref([])
+const showGuideLines = ref(false)
+const guideLineCols = ref(5)
+const guideLineRows = ref(5)
+const guideLineColsDraft = ref(5)
+const guideLineRowsDraft = ref(5)
+const guideLineDraftError = ref('')
 const boardColors = [
   { id: 'transparent', label: '透明', hex: null, rgb: null },
   ...palette.map(color => ({ ...color, label: color.id }))
@@ -321,6 +373,11 @@ const boardHeightPx = computed(() => canvasPixelHeight.value + 28)
 const horizontalScrollContentWidth = computed(() => boardWidthPx.value + 56)
 const totalCells = computed(() => cols.value * rows.value)
 const activeTabLabel = computed(() => tabs.find(t => t.id === activeTab.value)?.label)
+const currentPresetLabel = computed(() => {
+  const match = presets.find(preset => preset.w === cols.value && preset.h === rows.value)
+  return match?.label || ''
+})
+
 const filteredPalette = computed(() => {
   const q = paletteQuery.value.trim().toLowerCase()
   if (!q) return paletteWithTransparent
@@ -515,6 +572,7 @@ function setCols(value, recordHistory = true) {
 
   if (recordHistory) pushHistory()
   resizeGridPreservingCells(next, rows.value)
+  handleGuideLineCompatibilityAfterResize()
 }
 
 function setRows(value, recordHistory = true) {
@@ -523,6 +581,7 @@ function setRows(value, recordHistory = true) {
 
   if (recordHistory) pushHistory()
   resizeGridPreservingCells(cols.value, next)
+  handleGuideLineCompatibilityAfterResize()
 }
 
 function applyPreset(preset) {
@@ -533,6 +592,77 @@ function applyPreset(preset) {
 
   pushHistory()
   resizeGridPreservingCells(nextCols, nextRows)
+  handleGuideLineCompatibilityAfterResize()
+}
+
+function handlePresetSelect(event) {
+  if (event.target.value === '__custom__') return
+  const preset = presets.find(item => item.label === event.target.value)
+  if (preset) applyPreset(preset)
+}
+
+function isGuideLineCompatible(groupCols = guideLineCols.value, groupRows = guideLineRows.value, width = cols.value, height = rows.value) {
+  const x = Number(groupCols)
+  const y = Number(groupRows)
+  const innerWidth = Number(width) - 2
+  const innerHeight = Number(height) - 2
+  return x > 0 && y > 0 && innerWidth > 0 && innerHeight > 0 && innerWidth % x === 0 && innerHeight % y === 0
+}
+
+function getGuideLineError(groupCols = guideLineCols.value, groupRows = guideLineRows.value, width = cols.value, height = rows.value) {
+  const x = Number(groupCols)
+  const y = Number(groupRows)
+  if (!x || !y) return '请输入辅助线格数。'
+  if (!isGuideLineCompatible(x, y, width, height)) {
+    return `辅助线不符合画布大小：当前画布为 ${width} × ${height}，去除最外圈 1 格后，无法按 ${x} × ${y} 均分。请换一个辅助线格数。`
+  }
+  return ''
+}
+
+function toggleGuideLines() {
+  if (showGuideLines.value) {
+    showGuideLines.value = false
+    drawBoard()
+    return
+  }
+
+  const error = getGuideLineError()
+  if (error) {
+    window.alert(error)
+    return
+  }
+
+  showGuideLines.value = true
+  nextTick(drawBoard)
+}
+
+function confirmGuideLineSize() {
+  const nextCols = Math.max(1, Math.min(200, Number(guideLineColsDraft.value) || 0))
+  const nextRows = Math.max(1, Math.min(200, Number(guideLineRowsDraft.value) || 0))
+  const error = getGuideLineError(nextCols, nextRows)
+
+  if (error) {
+    guideLineDraftError.value = error
+    return
+  }
+
+  guideLineCols.value = nextCols
+  guideLineRows.value = nextRows
+  guideLineColsDraft.value = nextCols
+  guideLineRowsDraft.value = nextRows
+  guideLineDraftError.value = ''
+  nextTick(drawBoard)
+}
+
+function handleGuideLineCompatibilityAfterResize() {
+  if (!showGuideLines.value) return
+
+  const error = getGuideLineError()
+  if (!error) return
+
+  showGuideLines.value = false
+  window.alert(`${error}\n\n已自动关闭辅助线。`)
+  nextTick(drawBoard)
 }
 
 // Kept for compatibility with existing callers. Resizing itself no longer
@@ -627,6 +757,63 @@ function drawMiniPreview() {
       }
     }
   }
+
+  if (showGuideLines.value && isGuideLineCompatible(guideLineCols.value, guideLineRows.value)) {
+    const xGroupSize = Number(guideLineCols.value)
+    const yGroupSize = Number(guideLineRows.value)
+    ctx.save()
+    ctx.strokeStyle = 'rgba(55, 48, 46, .7)'
+    ctx.lineWidth = Math.max(0.7, Math.min(1.4, Math.min(cellWidth, cellHeight) * 0.075))
+    ctx.setLineDash([Math.max(2, Math.min(5, cellWidth * 0.22)), Math.max(2, Math.min(4, cellWidth * 0.16))])
+
+    for (let col = 1 + xGroupSize; col < cols.value - 1; col += xGroupSize) {
+      const x = col * cellWidth
+      ctx.beginPath()
+      ctx.moveTo(x, cellHeight)
+      ctx.lineTo(x, height - cellHeight)
+      ctx.stroke()
+    }
+
+    for (let row = 1 + yGroupSize; row < rows.value - 1; row += yGroupSize) {
+      const y = row * cellHeight
+      ctx.beginPath()
+      ctx.moveTo(cellWidth, y)
+      ctx.lineTo(width - cellWidth, y)
+      ctx.stroke()
+    }
+
+    ctx.restore()
+  }
+}
+
+function drawGuideLines(ctx, width, height, groupCols, groupRows, cell) {
+  if (!showGuideLines.value || !isGuideLineCompatible(groupCols, groupRows)) return
+
+  const xGroupSize = Number(groupCols)
+  const yGroupSize = Number(groupRows)
+
+  ctx.save()
+  ctx.strokeStyle = '#000000'
+  ctx.lineWidth = Math.max(1, Math.min(1.8, cell * 0.075))
+  ctx.setLineDash([Math.max(3, cell * 0.22), Math.max(3, cell * 0.16)])
+
+  for (let col = 1 + xGroupSize; col < cols.value - 1; col += xGroupSize) {
+    const x = col * cell + 0.5
+    ctx.beginPath()
+    ctx.moveTo(x, cell)
+    ctx.lineTo(x, height - cell)
+    ctx.stroke()
+  }
+
+  for (let row = 1 + yGroupSize; row < rows.value - 1; row += yGroupSize) {
+    const y = row * cell + 0.5
+    ctx.beginPath()
+    ctx.moveTo(cell, y)
+    ctx.lineTo(width - cell, y)
+    ctx.stroke()
+  }
+
+  ctx.restore()
 }
 
 function drawBoard() {
@@ -677,6 +864,7 @@ function drawBoard() {
     }
   }
 
+  drawGuideLines(ctx, width, height, guideLineCols.value, guideLineRows.value, size)
   drawMiniPreview()
 }
 
@@ -753,6 +941,7 @@ function stopResize() {
   isResizing.value = false
   resizeStart = null
   window.removeEventListener('pointermove', handleResize)
+  handleGuideLineCompatibilityAfterResize()
 }
 
 // Keep the dedicated bottom scrollbar and the canvas viewport in sync.
@@ -786,6 +975,35 @@ function roundedRect(ctx, x, y, width, height, radius) {
   ctx.arcTo(x, y + height, x, y, r)
   ctx.arcTo(x, y, x + width, y, r)
   ctx.closePath()
+}
+
+function drawExportGuideLines(ctx, boardX, boardY, boardWidth, boardHeight, boardSize) {
+  if (!showGuideLines.value || !isGuideLineCompatible(guideLineCols.value, guideLineRows.value)) return
+
+  const xGroupSize = Number(guideLineCols.value)
+  const yGroupSize = Number(guideLineRows.value)
+  ctx.save()
+  ctx.strokeStyle = '#000000'
+  ctx.lineWidth = Math.max(1.4, Math.min(2.6, boardSize * 0.075))
+  ctx.setLineDash([Math.max(5, boardSize * 0.22), Math.max(4, boardSize * 0.16)])
+
+  for (let col = 1 + xGroupSize; col < cols.value - 1; col += xGroupSize) {
+    const x = boardX + col * boardSize + 0.5
+    ctx.beginPath()
+    ctx.moveTo(x, boardY + boardSize)
+    ctx.lineTo(x, boardY + boardHeight - boardSize)
+    ctx.stroke()
+  }
+
+  for (let row = 1 + yGroupSize; row < rows.value - 1; row += yGroupSize) {
+    const y = boardY + row * boardSize + 0.5
+    ctx.beginPath()
+    ctx.moveTo(boardX + boardSize, y)
+    ctx.lineTo(boardX + boardWidth - boardSize, y)
+    ctx.stroke()
+  }
+
+  ctx.restore()
 }
 
 function drawExportLegend(ctx, items, x, y, width) {
@@ -944,6 +1162,8 @@ function buildExportCanvas() {
     }
   }
 
+  drawExportGuideLines(ctx, boardX, boardY, boardWidth, boardHeight, boardSize)
+
   // Legend card.
   const legendY = cardY + cardH + 22
   const legendX = margin
@@ -1080,7 +1300,7 @@ function exportPdf() {
 }
 
 watch(
-  [activeTab, showCodes, zoom, showCoordinates, cols, rows, baseColor, boardWidthPx],
+  [activeTab, showCodes, zoom, showCoordinates, cols, rows, baseColor, boardWidthPx, showGuideLines, guideLineCols, guideLineRows],
   () => {
     nextTick(() => {
       drawBoard()
